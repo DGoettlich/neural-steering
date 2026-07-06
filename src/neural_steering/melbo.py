@@ -64,9 +64,7 @@ class MELBO:
 
     def fit(self, examples, n_vectors=1, initial_vectors=None, verbose=True):
         self._freeze_model()  # TODO revert at the end
-        encoding = self.model.tokenizer.batch_encode_plus(
-            examples, return_tensors="pt", padding=True
-        )
+        encoding = self.model.tokenizer(examples, return_tensors="pt", padding=True)
         encoding = encoding.to(self.model.cfg.device)
         mask = create_steering_mask(encoding, self.token_indices)
 
