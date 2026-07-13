@@ -49,9 +49,7 @@ class ContrastiveSteering:
             disable=not verbose,
         ):
             # Tokenize prompts
-            encoding = self.model.tokenizer.batch_encode_plus(
-                batch, return_tensors="pt", padding=True
-            )
+            encoding = self.model.tokenizer(batch, return_tensors="pt", padding=True)
 
             encoding = encoding.to(self.model.cfg.device)
             mask = create_steering_mask(encoding, self.token_indices).float()
