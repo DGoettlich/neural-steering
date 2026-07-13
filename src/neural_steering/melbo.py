@@ -149,7 +149,7 @@ class MELBO:
             target_activations = activations
 
         def add_steering_vector(activations, hook):
-            return activations + steering_vector
+            return activations + steering_vector.to(activations.dtype)
 
         with torch.no_grad(), self.model.hooks(
             fwd_hooks=[(target_hook, capture_target)]
