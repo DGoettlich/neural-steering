@@ -142,10 +142,17 @@ class MELBO:
             lr=self.lr,
         )
 
-        unsteered_activations = self.model.forward(
+        unsteered_source = self.model.forward(
             encoding.input_ids,
             attention_mask=encoding.attention_mask,
             stop_at_layer=self.src_layer + 1,
+        ).detach()
+
+        unsteered_target = self.model.forward(
+            unsteered_source,
+            attention_mask=encoding.attention_mask,
+            start_at_layer=self.src_layer + 1,
+            stop_at_layer=self.tgt_layer + 1,
         ).detach()
 
         losses = []
@@ -156,7 +163,7 @@ class MELBO:
             disable=not verbose,
         )
         for _ in pbar:
-            steered_src = unsteered_activations + steering_vector
+            steered_src = unsteered_source + steering_vector
 
             steered_target = self.model.forward(
                 steered_src,
@@ -165,7 +172,7 @@ class MELBO:
                 stop_at_layer=self.tgt_layer + 1,
             )
 
-            loss = self._compute_loss(steered_target, unsteered_activations, mask)
+            loss = self.compute_loss(steered_target, unsteered_target, mask)
 
             loss.mean().backward()
             losses.append(loss.detach())
@@ -194,9 +201,9 @@ class MELBO:
 
         return steering_vector, torch.stack(losses).cpu().T
 
-    def _compute_loss(self, steered_target, unsteered_activations, mask):
+    def compute_loss(self, steered_target, unsteered_target, mask):
         return (
-            -(steered_target[mask] - unsteered_activations[mask])
+            -(steered_target[mask] - unsteered_target[mask])
             .reshape(steered_target.shape[0], -1, self.model.cfg.d_model)
             .norm(dim=-1)
             .pow(self.power)
@@ -258,7 +265,7 @@ class TargetedMELBO(MELBO):
         self.target_activation = self._compute_target_activation(example)
         return super().fit([example], n_vectors, self.starting_vector.value[None, None])
 
-    def _compute_loss(self, steered_target, unsteered_activations, mask):
+    def compute_loss(self, steered_target, unsteered_target, mask):
         return (
             steered_target[mask].mean(dim=0) - self.target_activation[mask].mean(dim=0)
         ).norm()
