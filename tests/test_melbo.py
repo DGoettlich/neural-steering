@@ -33,7 +33,7 @@ def small_transformer():
         def to(self, device):
             return self
 
-    mock_tokenizer.batch_encode_plus.return_value = MockEncoding(
+    mock_tokenizer.return_value = MockEncoding(
         input_ids=torch.randint(0, 12, (3, 8)),
         attention_mask=torch.ones(3, 8, dtype=torch.long),
     )
