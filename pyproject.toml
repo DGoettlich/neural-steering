@@ -1,6 +1,6 @@
 [project]
 name = "neural-steering"
-version = "0.0.2-alpha0"
+version = "0.0.3-alpha0"
 description = "Package for activation space interventions in neural networks"
 authors = [
     {name = "Mateusz", email = "mateusz.piotrowski94@gmail.com"},
