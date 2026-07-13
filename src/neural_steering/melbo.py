@@ -140,18 +140,29 @@ class MELBO:
             lr=self.lr,
         )
 
-        unsteered_source = self.model.forward(
-            encoding.input_ids,
-            attention_mask=encoding.attention_mask,
-            stop_at_layer=self.src_layer + 1,
-        ).detach()
+        source_hook = f"blocks.{self.src_layer}.hook_resid_post"
+        target_hook = f"blocks.{self.tgt_layer}.hook_resid_post"
+        target_activations = None
 
-        unsteered_target = self.model.forward(
-            unsteered_source,
-            attention_mask=encoding.attention_mask,
-            start_at_layer=self.src_layer + 1,
-            stop_at_layer=self.tgt_layer + 1,
-        ).detach()
+        def capture_target(activations, hook):
+            nonlocal target_activations
+            target_activations = activations
+
+        def add_steering_vector(activations, hook):
+            return activations + steering_vector
+
+        with torch.no_grad(), self.model.hooks(
+            fwd_hooks=[(target_hook, capture_target)]
+        ):
+            self.model.forward(
+                encoding.input_ids,
+                attention_mask=encoding.attention_mask,
+                stop_at_layer=self.tgt_layer + 1,
+                return_type=None,
+            )
+
+        assert target_activations is not None
+        unsteered_target = target_activations.detach()
 
         losses = []
 
@@ -161,16 +172,22 @@ class MELBO:
             disable=not verbose,
         )
         for _ in pbar:
-            steered_src = unsteered_source + steering_vector
+            target_activations = None
+            with self.model.hooks(
+                fwd_hooks=[
+                    (source_hook, add_steering_vector),
+                    (target_hook, capture_target),
+                ]
+            ):
+                self.model.forward(
+                    encoding.input_ids,
+                    attention_mask=encoding.attention_mask,
+                    stop_at_layer=self.tgt_layer + 1,
+                    return_type=None,
+                )
 
-            steered_target = self.model.forward(
-                steered_src,
-                attention_mask=encoding.attention_mask,
-                start_at_layer=self.src_layer + 1,
-                stop_at_layer=self.tgt_layer + 1,
-            )
-
-            loss = self.compute_loss(steered_target, unsteered_target, mask)
+            assert target_activations is not None
+            loss = self.compute_loss(target_activations, unsteered_target, mask)
 
             loss.mean().backward()
             losses.append(loss.detach())
